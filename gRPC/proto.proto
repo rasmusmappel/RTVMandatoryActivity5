@@ -1,14 +1,24 @@
 syntax = "proto3";
 option go_package = "RTVMandatoryActivity5/gRPC/proto";
 
-message  {
+message Amount {
+    string id = 1;
+    int32 bidAmount = 2;
+}
+
+message Acknowledgement {
     
 }
 
-message  {
-    
+message Nothing {
+
+}
+
+message Outcome {
+
 }
 
 service AuctionHouse {
-    rpc Request(RequestMsg) returns (ReplyMsg);
+    rpc Bid(Amount) returns (Acknowledgement);
+    rpc Result(Nothing) returns (Outcome);
 }
