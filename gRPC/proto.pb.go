@@ -157,8 +157,7 @@ type Outcome struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	HighestBidId     string                 `protobuf:"bytes,1,opt,name=highestBidId,proto3" json:"highestBidId,omitempty"`
 	HighestBidAmount int32                  `protobuf:"varint,2,opt,name=highestBidAmount,proto3" json:"highestBidAmount,omitempty"`
-	Ended            bool                   `protobuf:"varint,3,opt,name=ended,proto3" json:"ended,omitempty"`
-	EndTimestamp     int32                  `protobuf:"varint,4,opt,name=endTimestamp,proto3" json:"endTimestamp,omitempty"`
+	EndTimestamp     int64                  `protobuf:"varint,3,opt,name=endTimestamp,proto3" json:"endTimestamp,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -207,14 +206,7 @@ func (x *Outcome) GetHighestBidAmount() int32 {
 	return 0
 }
 
-func (x *Outcome) GetEnded() bool {
-	if x != nil {
-		return x.Ended
-	}
-	return false
-}
-
-func (x *Outcome) GetEndTimestamp() int32 {
+func (x *Outcome) GetEndTimestamp() int64 {
 	if x != nil {
 		return x.EndTimestamp
 	}
@@ -225,8 +217,7 @@ type AuctionInformation struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	HighestBidId     string                 `protobuf:"bytes,1,opt,name=highestBidId,proto3" json:"highestBidId,omitempty"`
 	HighestBidAmount int32                  `protobuf:"varint,2,opt,name=highestBidAmount,proto3" json:"highestBidAmount,omitempty"`
-	Ended            bool                   `protobuf:"varint,3,opt,name=ended,proto3" json:"ended,omitempty"`
-	EndTimestamp     int32                  `protobuf:"varint,4,opt,name=endTimestamp,proto3" json:"endTimestamp,omitempty"`
+	EndTimestamp     int64                  `protobuf:"varint,3,opt,name=endTimestamp,proto3" json:"endTimestamp,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -275,14 +266,7 @@ func (x *AuctionInformation) GetHighestBidAmount() int32 {
 	return 0
 }
 
-func (x *AuctionInformation) GetEnded() bool {
-	if x != nil {
-		return x.Ended
-	}
-	return false
-}
-
-func (x *AuctionInformation) GetEndTimestamp() int32 {
+func (x *AuctionInformation) GetEndTimestamp() int64 {
 	if x != nil {
 		return x.EndTimestamp
 	}
@@ -345,17 +329,15 @@ const file_proto_proto_rawDesc = "" +
 	"\n" +
 	"bidOutcome\x18\x01 \x01(\tR\n" +
 	"bidOutcome\"\t\n" +
-	"\aNothing\"\x93\x01\n" +
+	"\aNothing\"}\n" +
 	"\aOutcome\x12\"\n" +
 	"\fhighestBidId\x18\x01 \x01(\tR\fhighestBidId\x12*\n" +
-	"\x10highestBidAmount\x18\x02 \x01(\x05R\x10highestBidAmount\x12\x14\n" +
-	"\x05ended\x18\x03 \x01(\bR\x05ended\x12\"\n" +
-	"\fendTimestamp\x18\x04 \x01(\x05R\fendTimestamp\"\x9e\x01\n" +
+	"\x10highestBidAmount\x18\x02 \x01(\x05R\x10highestBidAmount\x12\"\n" +
+	"\fendTimestamp\x18\x03 \x01(\x03R\fendTimestamp\"\x88\x01\n" +
 	"\x12AuctionInformation\x12\"\n" +
 	"\fhighestBidId\x18\x01 \x01(\tR\fhighestBidId\x12*\n" +
-	"\x10highestBidAmount\x18\x02 \x01(\x05R\x10highestBidAmount\x12\x14\n" +
-	"\x05ended\x18\x03 \x01(\bR\x05ended\x12\"\n" +
-	"\fendTimestamp\x18\x04 \x01(\x05R\fendTimestamp\"7\n" +
+	"\x10highestBidAmount\x18\x02 \x01(\x05R\x10highestBidAmount\x12\"\n" +
+	"\fendTimestamp\x18\x03 \x01(\x03R\fendTimestamp\"7\n" +
 	"\x13NodeAcknowledgement\x12 \n" +
 	"\vcopyOutcome\x18\x01 \x01(\tR\vcopyOutcome2\x99\x01\n" +
 	"\fAuctionHouse\x12&\n" +

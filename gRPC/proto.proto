@@ -15,15 +15,13 @@ message Nothing {}
 message Outcome {
     string highestBidId = 1;
     int32 highestBidAmount = 2;
-    bool ended = 3;
-    int32 endTimestamp = 4;
+    int64 endTimestamp = 3;
 }
 
 message AuctionInformation {
     string highestBidId = 1;
     int32 highestBidAmount = 2;
-    bool ended = 3;
-    int32 endTimestamp = 4;
+    int64 endTimestamp = 3;
 }
 
 message NodeAcknowledgement {
