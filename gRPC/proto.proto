@@ -6,19 +6,32 @@ message Amount {
     int32 bidAmount = 2;
 }
 
-message Acknowledgement {
-    
+message ClientAcknowledgement {
+    string bidOutcome = 1;
 }
 
-message Nothing {
-
-}
+message Nothing {}
 
 message Outcome {
+    string highestBidId = 1;
+    int32 highestBidAmount = 2;
+    bool ended = 3;
+    int32 endTimestamp = 4;
+}
 
+message AuctionInformation {
+    string highestBidId = 1;
+    int32 highestBidAmount = 2;
+    bool ended = 3;
+    int32 endTimestamp = 4;
+}
+
+message NodeAcknowledgement {
+    string copyOutcome = 1;
 }
 
 service AuctionHouse {
-    rpc Bid(Amount) returns (Acknowledgement);
+    rpc Bid(Amount) returns (ClientAcknowledgement);
     rpc Result(Nothing) returns (Outcome);
+    rpc CopyAuctionInformation(AuctionInformation) returns (NodeAcknowledgement);
 }
