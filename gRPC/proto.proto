@@ -1,0 +1,14 @@
+syntax = "proto3";
+option go_package = "RTVMandatoryActivity5/gRPC/proto";
+
+message  {
+    
+}
+
+message  {
+    
+}
+
+service AuctionHouse {
+    rpc Request(RequestMsg) returns (ReplyMsg);
+}
