@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -95,8 +96,12 @@ func main() {
 		server.otherNodeClients[k] = pb.NewAuctionHouseClient(conn)
 	}
 
-	for {
+	scanner := bufio.NewScanner(os.Stdin)
 
+	for scanner.Scan() {
+		if strings.ToLower(scanner.Text()) == "exit" {
+			break
+		}
 	}
 
 	grpcServer.Stop()
@@ -107,17 +112,105 @@ func main() {
 // Method for handling client bid requests
 func (s *Server) Bid(ctx context.Context, bidMessage *pb.Amount) (*pb.ClientAcknowledgement, error) {
 
+	s.mu.Lock()
+
+	// The if-statement below handles creation of the first auction.
 	if s.currentHighestBidder == "none" {
 
-		s.currentAuctionTimestamp = time.Now().Unix() + 100
-		s.currentHighestBid = bidMessage.BidAmount
-		s.currentHighestBidder = bidMessage.Id
+		localCurrentAuctionTimestamp := time.Now().Unix() + 100
+		localCurrentHighestBid := bidMessage.BidAmount
+		localCurrentHighestBidder := bidMessage.Id
+
+		copyMessage := &pb.AuctionInformation{EndTimestamp: localCurrentAuctionTimestamp,
+			HighestBidAmount: localCurrentHighestBid,
+			HighestBidId:     localCurrentHighestBidder,
+		}
+
+		for nodeId, nodeClient := range s.otherNodeClients {
+			acknowledgement, err := nodeClient.CopyAuctionInformation(context.Background(), copyMessage)
+
+			if err != nil {
+				log.Fatalf("Node " + nodeId + " failed when copying auction information")
+			}
+
+			log.Println(acknowledgement.CopyOutcome)
+		}
+
+		s.currentAuctionTimestamp = localCurrentAuctionTimestamp
+		s.currentHighestBid = localCurrentHighestBid
+		s.currentHighestBidder = localCurrentHighestBidder
+
+		s.mu.Unlock()
+
+		return &pb.ClientAcknowledgement{BidOutcome: "This was the first auction, created a new auction with your bid"}, nil
 
 	}
 
-	if s.currentAuctionTimestamp < time.Now().Unix() {
+	if s.currentAuctionTimestamp > time.Now().Unix() {
 
+		log.Println("Internal highest bid " + strconv.Itoa(int(s.currentHighestBid)))
+		log.Println("Incoming bid " + strconv.Itoa(int(bidMessage.BidAmount)))
+		if s.currentHighestBid < bidMessage.BidAmount {
+
+			localCurrentHighestBid := bidMessage.BidAmount
+			localCurrentHighestBidder := bidMessage.Id
+
+			copyMessage := &pb.AuctionInformation{EndTimestamp: s.currentAuctionTimestamp,
+				HighestBidAmount: localCurrentHighestBid,
+				HighestBidId:     localCurrentHighestBidder,
+			}
+
+			for nodeId, nodeClient := range s.otherNodeClients {
+				acknowledgement, err := nodeClient.CopyAuctionInformation(context.Background(), copyMessage)
+
+				if err != nil {
+					log.Fatalf("Node " + nodeId + " failed when copying auction information")
+				}
+
+				log.Println(acknowledgement.CopyOutcome)
+			}
+
+			s.currentHighestBid = localCurrentHighestBid
+			s.currentHighestBidder = localCurrentHighestBidder
+
+			s.mu.Unlock()
+
+			return &pb.ClientAcknowledgement{BidOutcome: "Your bid was higher than the previously highest bid, and was accepted"}, nil
+
+		} else {
+
+			s.mu.Unlock()
+
+			return &pb.ClientAcknowledgement{BidOutcome: "Your bid was lower than the highest bid, and was rejected"}, nil
+
+		}
 	} else {
+
+		localCurrentAuctionTimestamp := time.Now().Unix() + 100
+		localCurrentHighestBid := bidMessage.BidAmount
+		localCurrentHighestBidder := bidMessage.Id
+
+		copyMessage := &pb.AuctionInformation{EndTimestamp: localCurrentAuctionTimestamp,
+			HighestBidAmount: localCurrentHighestBid,
+			HighestBidId:     localCurrentHighestBidder,
+		}
+
+		for nodeId, nodeClient := range s.otherNodeClients {
+			acknowledgement, err := nodeClient.CopyAuctionInformation(context.Background(), copyMessage)
+
+			if err != nil {
+				log.Fatalf("Node " + nodeId + " failed when copying auction information")
+			}
+
+			log.Println(acknowledgement.CopyOutcome)
+		}
+
+		s.currentAuctionTimestamp = localCurrentAuctionTimestamp
+		s.currentHighestBid = localCurrentHighestBid
+		s.currentHighestBidder = localCurrentHighestBidder
+
+		s.mu.Unlock()
+
 		return &pb.ClientAcknowledgement{BidOutcome: "Old auction has ended, created a new auction with your bid"}, nil
 	}
 
@@ -125,10 +218,19 @@ func (s *Server) Bid(ctx context.Context, bidMessage *pb.Amount) (*pb.ClientAckn
 
 // Method for handling client result requests
 func (s *Server) Result(ctx context.Context, emptyMessage *pb.Nothing) (*pb.Outcome, error) {
+	s.mu.Lock()
+	outcomeMessage := &pb.Outcome{HighestBidId: s.currentHighestBidder, HighestBidAmount: s.currentHighestBid, EndTimestamp: s.currentAuctionTimestamp}
+	s.mu.Unlock()
+
+	return outcomeMessage, nil
 
 }
 
 // Method for copying auction information from another node
 func (s *Server) CopyAuctionInformation(ctx context.Context, information *pb.AuctionInformation) (*pb.NodeAcknowledgement, error) {
+	s.currentAuctionTimestamp = information.EndTimestamp
+	s.currentHighestBid = information.HighestBidAmount
+	s.currentHighestBidder = information.HighestBidId
 
+	return &pb.NodeAcknowledgement{CopyOutcome: "Successfully copied the sent information"}, nil
 }

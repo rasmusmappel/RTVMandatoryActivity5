@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -46,9 +47,11 @@ func main() {
 	for scanner.Scan() {
 		input = scanner.Text()
 
-		if strings.Contains("bid", strings.ToLower(input)) {
+		if strings.Contains(strings.ToLower(input), "bid") {
 
-			amount, _ := strconv.Atoi(input)
+			inputArray := strings.Split(input, " ")
+
+			amount, _ := strconv.Atoi(inputArray[1])
 
 			makeBid(client, amount, id)
 
@@ -84,5 +87,9 @@ func readOutcome(client pb.AuctionHouseClient) {
 		log.Fatalf("[ERROR] Outcome request returned an error!")
 	}
 
-	fmt.Println(outcomeResult)
+	fmt.Println("Current highest bidder: " + outcomeResult.HighestBidId)
+	fmt.Println("Current highest bid: " + strconv.Itoa(int(outcomeResult.HighestBidAmount)))
+
+	timestamp := time.Unix(outcomeResult.EndTimestamp, 0)
+	fmt.Println("End timestamp for current auction: " + timestamp.UTC().String())
 }
