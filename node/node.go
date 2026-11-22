@@ -118,7 +118,7 @@ func main() {
 
 	pb.RegisterAuctionHouseServer(grpcServer, &server)
 
-	//Fill clients map with new AuctionHouseClients based on the adresses of other nodes
+	// Fill otherNodeClients map with new AuctionHouseClients based on the adresses and IDs of other nodes in the otherAddresses map
 	for id, port := range otherAddresses {
 		conn, err := grpc.NewClient(port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if (err) != nil {
@@ -159,7 +159,7 @@ func (s *Server) Bid(ctx context.Context, bidMessage *pb.Amount) (*pb.Ack, error
 		}
 
 		// If not, forward the message to the primary node, so it can handle the bid and
-		// the replication in a proper order. No lock is held here, so the primary can replicate to me meanwhile.
+		// the replication in a proper order. No lock is held here, so the primary can replicate to this node meanwhile.
 		forwardContext, cancel := context.WithTimeout(ctx, forwardTimeout)
 		response, err := s.otherNodeClients[primaryId].Bid(forwardContext, bidMessage)
 		cancel()
@@ -174,7 +174,7 @@ func (s *Server) Bid(ctx context.Context, bidMessage *pb.Amount) (*pb.Ack, error
 		}
 
 		// The network is reliable, so a failed or timed out call means the primary has crashed.
-		// Mark it as dead and go around the loop, which gives the next lowest ID as the new primary (maybe me).
+		// Mark it as dead and go around the loop, which gives the next lowest ID as the new primary (which may be this node).
 		s.markDead(primaryId)
 	}
 }
@@ -188,7 +188,7 @@ func (s *Server) handleBidAsPrimary(bidMessage *pb.Amount) *pb.Ack {
 
 	now := time.Now().Unix()
 
-	// A client retries its bid if it never got an answer, for example because the old primary crashed after applying it.
+	// A client could possibly retry its bid if it never got an answer, for example because the old primary crashed after applying it.
 	// If the bid is already the highest bid, treat the retry as a success instead of failing it for not being higher.
 	// The state is replicated again first, because the old primary may have crashed before reaching every backup.
 	if s.seq > 0 && s.highestBidId == bidMessage.Id && s.highestBidAmount == bidMessage.BidAmount {
@@ -279,13 +279,14 @@ func (s *Server) handleResultAsPrimary() *pb.State {
 	return state
 }
 
-// Method for receiving the full auction state from the primary.
+// Method for a backup node receiving the full auction state from the primary node.
 func (s *Server) Replicate(ctx context.Context, state *pb.State) (*pb.Ack, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Only move forward. The state contains everything, so a node that missed an earlier update is brought
+	// Only move the sequence number forward, so if somehow and old state is received, it's not applied.
+	// Also, the state contains everything, so a node that missed an earlier update is brought
 	// up to date by this one, and an old or repeated update can't overwrite a newer state.
 	if state.Seq > s.seq {
 		s.apply(state)
@@ -296,8 +297,8 @@ func (s *Server) Replicate(ctx context.Context, state *pb.State) (*pb.Ack, error
 }
 
 // Method for sending a state to all backups, in ascending ID order.
-// The order matters: if the primary crashes halfway, the backup that becomes the new primary
-// (the lowest ID) is the first one that got the state, so it's at least as new as all other backups.
+// The order matters: if the primary somehow crashes halfway through replication, the backup that becomes the new primary
+// (the lowest alphabetical ID) is the first one that got the state, so it's at least as new as all other backups.
 // Must be called while holding mu.
 func (s *Server) replicateAsPrimary(state *pb.State) {
 
@@ -315,8 +316,8 @@ func (s *Server) replicateAsPrimary(state *pb.State) {
 
 		cancel()
 
-		// No majority is needed. The failure detector is perfect in this "network", so a node that doesn't answer is simply
-		// crashed, and it's dropped from the set of nodes that the primary replicates to.
+		// It's assummed that failure detection is perfect in this "network", so a node that doesn't answer is simply
+		// crashed/manually stopped, and it's dropped from the set of nodes that the primary replicates to.
 		if err != nil {
 			log.Printf("Node %s failed when replicating, marking it as crashed: %v", nodeId, err)
 			s.markDead(nodeId)
@@ -351,7 +352,8 @@ func (s *Server) snapshot() *pb.State {
 }
 
 // Method for finding the primary, which is the lowest ID that hasn't been marked as dead.
-// This node is never marked as dead, so there's always a primary, and every node reaches the same
+// The node this runs on is never marked as dead (because if it's running it, it can't be dead),
+// so there's always a primary, and every node reaches the same
 // answer without any election messages once they agree on which nodes have crashed.
 func (s *Server) currentPrimary() string {
 
