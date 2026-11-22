@@ -236,7 +236,7 @@ func (s *Server) handleBidAsPrimary(bidMessage *pb.Amount) *pb.Ack {
 	return &pb.Ack{Outcome: "success"}
 }
 
-// Method for handling client result requests
+// Method for handling client result requests. Has the same logic as Bid for selecting primary and possibly marking it as dead.
 func (s *Server) Result(ctx context.Context, emptyMessage *pb.Nothing) (*pb.State, error) {
 
 	for {
