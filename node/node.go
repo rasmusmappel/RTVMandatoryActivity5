@@ -31,7 +31,7 @@ const (
 
 type Server struct {
 	pb.UnimplementedAuctionHouseServer
-	id string
+	id string // This node's ID. Not protected by mu or deadMu, since it doesn't change after initial startup.
 
 	// The auction state that this node contains. seq == 0 means that no bid has been placed yet.
 	// Protected by mu, which is also the serialization point of the whole system when this node is the primary.
