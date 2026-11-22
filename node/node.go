@@ -136,7 +136,7 @@ func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	for scanner.Scan() {
+	for scanner.Scan() { // Manually stop this node, so a crash can be manually simulated.
 		if strings.ToLower(scanner.Text()) == "exit" {
 			break
 		}
