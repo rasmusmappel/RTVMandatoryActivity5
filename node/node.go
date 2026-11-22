@@ -18,7 +18,7 @@ import (
 )
 
 // Length of the auction in seconds. The clock starts when the first bid is accepted.
-const auctionDuration int64 = 200
+const auctionDuration int64 = 100
 
 // The network is assumed to deliver messages to non-crashed nodes within a known time limit,
 // so if a call takes longer than these limits, the node that was called has crashed.
@@ -108,7 +108,7 @@ func main() {
 	}
 
 	// Sort the IDs in the nodeId slice, so the lowest-ID live node can be found as the primary,
-	// and so replication always happens in ascending ID order
+	// and so replication and primary selection always happens in ascending ID order
 	sort.Strings(server.nodeIds)
 
 	// Listen and serve own server
@@ -118,7 +118,7 @@ func main() {
 
 	pb.RegisterAuctionHouseServer(grpcServer, &server)
 
-	//Fill clients map with new AuctionHouseClients based on the other addresses in the
+	//Fill clients map with new AuctionHouseClients based on the adresses of other nodes
 	for id, port := range otherAddresses {
 		conn, err := grpc.NewClient(port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if (err) != nil {
@@ -192,7 +192,7 @@ func (s *Server) handleBidAsPrimary(bidMessage *pb.Amount) *pb.Ack {
 	// If the bid is already the highest bid, treat the retry as a success instead of failing it for not being higher.
 	// The state is replicated again first, because the old primary may have crashed before reaching every backup.
 	if s.seq > 0 && s.highestBidId == bidMessage.Id && s.highestBidAmount == bidMessage.BidAmount {
-		s.replicate(s.snapshot()) // Send state to other nodes
+		s.replicateAsPrimary(s.snapshot()) // Send state to other nodes
 
 		log.Printf("Bid of %d from %s was already registered, treating it as a retry", bidMessage.BidAmount, bidMessage.Id)
 
@@ -228,7 +228,7 @@ func (s *Server) handleBidAsPrimary(bidMessage *pb.Amount) *pb.Ack {
 
 	// Send the new state to the backups before answering the client,
 	// so an acknowledged bid is never lost when the primary crashes.
-	s.replicate(newState)
+	s.replicateAsPrimary(newState)
 	s.apply(newState)
 
 	log.Printf("Bid of %d from %s accepted", bidMessage.BidAmount, bidMessage.Id)
@@ -299,7 +299,7 @@ func (s *Server) Replicate(ctx context.Context, state *pb.State) (*pb.Ack, error
 // The order matters: if the primary crashes halfway, the backup that becomes the new primary
 // (the lowest ID) is the first one that got the state, so it's at least as new as all other backups.
 // Must be called while holding mu.
-func (s *Server) replicate(state *pb.State) {
+func (s *Server) replicateAsPrimary(state *pb.State) {
 
 	for _, nodeId := range s.nodeIds {
 
