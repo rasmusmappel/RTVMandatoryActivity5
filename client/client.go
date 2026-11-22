@@ -22,7 +22,7 @@ const requestTimeout = 10 * time.Second
 type Client struct {
 	id        string                  // My own client ID
 	nodes     []pb.AuctionHouseClient // Map of the actual clients to connect to "serverside" nodes
-	addresses []string                // Map of the adresses of known nodes, so the client can reconnect to another node if the node it's connected to crashes/becomes unavailable
+	addresses []string                // Slice with the adresses of known nodes, so the client can reconnect to another node if the node it's connected to crashes/becomes unavailable
 	current   int                     // Index of the node that answered last, which is tried first next time this client tries to make a bid or read results
 }
 
