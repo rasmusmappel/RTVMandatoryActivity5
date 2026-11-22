@@ -19,24 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuctionHouse_Bid_FullMethodName                       = "/AuctionHouse/Bid"
-	AuctionHouse_Result_FullMethodName                    = "/AuctionHouse/Result"
-	AuctionHouse_CopyAuctionInformation_FullMethodName    = "/AuctionHouse/CopyAuctionInformation"
-	AuctionHouse_CommitAuctionInformation_FullMethodName  = "/AuctionHouse/CommitAuctionInformation"
-	AuctionHouse_GetRecoveryInformation_FullMethodName    = "/AuctionHouse/GetRecoveryInformation"
-	AuctionHouse_GetPrimaryAcknowledgement_FullMethodName = "/AuctionHouse/GetPrimaryAcknowledgement"
+	AuctionHouse_Bid_FullMethodName       = "/AuctionHouse/Bid"
+	AuctionHouse_Result_FullMethodName    = "/AuctionHouse/Result"
+	AuctionHouse_Replicate_FullMethodName = "/AuctionHouse/Replicate"
 )
 
 // AuctionHouseClient is the client API for AuctionHouse service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuctionHouseClient interface {
-	Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*ClientAcknowledgement, error)
-	Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error)
-	CopyAuctionInformation(ctx context.Context, in *AuctionInformation, opts ...grpc.CallOption) (*NodeAcknowledgement, error)
-	CommitAuctionInformation(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*NodeAcknowledgement, error)
-	GetRecoveryInformation(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*RecoveryInformation, error)
-	GetPrimaryAcknowledgement(ctx context.Context, in *NewPrimary, opts ...grpc.CallOption) (*PrimaryAcknowledgement, error)
+	Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*Ack, error)
+	Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*State, error)
+	Replicate(ctx context.Context, in *State, opts ...grpc.CallOption) (*Ack, error)
 }
 
 type auctionHouseClient struct {
@@ -47,9 +41,9 @@ func NewAuctionHouseClient(cc grpc.ClientConnInterface) AuctionHouseClient {
 	return &auctionHouseClient{cc}
 }
 
-func (c *auctionHouseClient) Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*ClientAcknowledgement, error) {
+func (c *auctionHouseClient) Bid(ctx context.Context, in *Amount, opts ...grpc.CallOption) (*Ack, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClientAcknowledgement)
+	out := new(Ack)
 	err := c.cc.Invoke(ctx, AuctionHouse_Bid_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -57,9 +51,9 @@ func (c *auctionHouseClient) Bid(ctx context.Context, in *Amount, opts ...grpc.C
 	return out, nil
 }
 
-func (c *auctionHouseClient) Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error) {
+func (c *auctionHouseClient) Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*State, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Outcome)
+	out := new(State)
 	err := c.cc.Invoke(ctx, AuctionHouse_Result_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -67,40 +61,10 @@ func (c *auctionHouseClient) Result(ctx context.Context, in *Nothing, opts ...gr
 	return out, nil
 }
 
-func (c *auctionHouseClient) CopyAuctionInformation(ctx context.Context, in *AuctionInformation, opts ...grpc.CallOption) (*NodeAcknowledgement, error) {
+func (c *auctionHouseClient) Replicate(ctx context.Context, in *State, opts ...grpc.CallOption) (*Ack, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(NodeAcknowledgement)
-	err := c.cc.Invoke(ctx, AuctionHouse_CopyAuctionInformation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionHouseClient) CommitAuctionInformation(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*NodeAcknowledgement, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(NodeAcknowledgement)
-	err := c.cc.Invoke(ctx, AuctionHouse_CommitAuctionInformation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionHouseClient) GetRecoveryInformation(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*RecoveryInformation, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecoveryInformation)
-	err := c.cc.Invoke(ctx, AuctionHouse_GetRecoveryInformation_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionHouseClient) GetPrimaryAcknowledgement(ctx context.Context, in *NewPrimary, opts ...grpc.CallOption) (*PrimaryAcknowledgement, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PrimaryAcknowledgement)
-	err := c.cc.Invoke(ctx, AuctionHouse_GetPrimaryAcknowledgement_FullMethodName, in, out, cOpts...)
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, AuctionHouse_Replicate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +75,9 @@ func (c *auctionHouseClient) GetPrimaryAcknowledgement(ctx context.Context, in *
 // All implementations must embed UnimplementedAuctionHouseServer
 // for forward compatibility.
 type AuctionHouseServer interface {
-	Bid(context.Context, *Amount) (*ClientAcknowledgement, error)
-	Result(context.Context, *Nothing) (*Outcome, error)
-	CopyAuctionInformation(context.Context, *AuctionInformation) (*NodeAcknowledgement, error)
-	CommitAuctionInformation(context.Context, *CommitRequest) (*NodeAcknowledgement, error)
-	GetRecoveryInformation(context.Context, *Nothing) (*RecoveryInformation, error)
-	GetPrimaryAcknowledgement(context.Context, *NewPrimary) (*PrimaryAcknowledgement, error)
+	Bid(context.Context, *Amount) (*Ack, error)
+	Result(context.Context, *Nothing) (*State, error)
+	Replicate(context.Context, *State) (*Ack, error)
 	mustEmbedUnimplementedAuctionHouseServer()
 }
 
@@ -127,23 +88,14 @@ type AuctionHouseServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAuctionHouseServer struct{}
 
-func (UnimplementedAuctionHouseServer) Bid(context.Context, *Amount) (*ClientAcknowledgement, error) {
+func (UnimplementedAuctionHouseServer) Bid(context.Context, *Amount) (*Ack, error) {
 	return nil, status.Error(codes.Unimplemented, "method Bid not implemented")
 }
-func (UnimplementedAuctionHouseServer) Result(context.Context, *Nothing) (*Outcome, error) {
+func (UnimplementedAuctionHouseServer) Result(context.Context, *Nothing) (*State, error) {
 	return nil, status.Error(codes.Unimplemented, "method Result not implemented")
 }
-func (UnimplementedAuctionHouseServer) CopyAuctionInformation(context.Context, *AuctionInformation) (*NodeAcknowledgement, error) {
-	return nil, status.Error(codes.Unimplemented, "method CopyAuctionInformation not implemented")
-}
-func (UnimplementedAuctionHouseServer) CommitAuctionInformation(context.Context, *CommitRequest) (*NodeAcknowledgement, error) {
-	return nil, status.Error(codes.Unimplemented, "method CommitAuctionInformation not implemented")
-}
-func (UnimplementedAuctionHouseServer) GetRecoveryInformation(context.Context, *Nothing) (*RecoveryInformation, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRecoveryInformation not implemented")
-}
-func (UnimplementedAuctionHouseServer) GetPrimaryAcknowledgement(context.Context, *NewPrimary) (*PrimaryAcknowledgement, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetPrimaryAcknowledgement not implemented")
+func (UnimplementedAuctionHouseServer) Replicate(context.Context, *State) (*Ack, error) {
+	return nil, status.Error(codes.Unimplemented, "method Replicate not implemented")
 }
 func (UnimplementedAuctionHouseServer) mustEmbedUnimplementedAuctionHouseServer() {}
 func (UnimplementedAuctionHouseServer) testEmbeddedByValue()                      {}
@@ -202,74 +154,20 @@ func _AuctionHouse_Result_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AuctionHouse_CopyAuctionInformation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AuctionInformation)
+func _AuctionHouse_Replicate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(State)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AuctionHouseServer).CopyAuctionInformation(ctx, in)
+		return srv.(AuctionHouseServer).Replicate(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AuctionHouse_CopyAuctionInformation_FullMethodName,
+		FullMethod: AuctionHouse_Replicate_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionHouseServer).CopyAuctionInformation(ctx, req.(*AuctionInformation))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionHouse_CommitAuctionInformation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CommitRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionHouseServer).CommitAuctionInformation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionHouse_CommitAuctionInformation_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionHouseServer).CommitAuctionInformation(ctx, req.(*CommitRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionHouse_GetRecoveryInformation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Nothing)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionHouseServer).GetRecoveryInformation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionHouse_GetRecoveryInformation_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionHouseServer).GetRecoveryInformation(ctx, req.(*Nothing))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionHouse_GetPrimaryAcknowledgement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NewPrimary)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionHouseServer).GetPrimaryAcknowledgement(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionHouse_GetPrimaryAcknowledgement_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionHouseServer).GetPrimaryAcknowledgement(ctx, req.(*NewPrimary))
+		return srv.(AuctionHouseServer).Replicate(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -290,20 +188,8 @@ var AuctionHouse_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AuctionHouse_Result_Handler,
 		},
 		{
-			MethodName: "CopyAuctionInformation",
-			Handler:    _AuctionHouse_CopyAuctionInformation_Handler,
-		},
-		{
-			MethodName: "CommitAuctionInformation",
-			Handler:    _AuctionHouse_CommitAuctionInformation_Handler,
-		},
-		{
-			MethodName: "GetRecoveryInformation",
-			Handler:    _AuctionHouse_GetRecoveryInformation_Handler,
-		},
-		{
-			MethodName: "GetPrimaryAcknowledgement",
-			Handler:    _AuctionHouse_GetPrimaryAcknowledgement_Handler,
+			MethodName: "Replicate",
+			Handler:    _AuctionHouse_Replicate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

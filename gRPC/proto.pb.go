@@ -73,27 +73,28 @@ func (x *Amount) GetBidAmount() int32 {
 	return 0
 }
 
-type ClientAcknowledgement struct {
+// Outcome either "success", "fail" or "exception"
+type Ack struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BidOutcome    string                 `protobuf:"bytes,1,opt,name=bidOutcome,proto3" json:"bidOutcome,omitempty"`
+	Outcome       string                 `protobuf:"bytes,1,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ClientAcknowledgement) Reset() {
-	*x = ClientAcknowledgement{}
+func (x *Ack) Reset() {
+	*x = Ack{}
 	mi := &file_proto_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ClientAcknowledgement) String() string {
+func (x *Ack) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ClientAcknowledgement) ProtoMessage() {}
+func (*Ack) ProtoMessage() {}
 
-func (x *ClientAcknowledgement) ProtoReflect() protoreflect.Message {
+func (x *Ack) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -105,14 +106,14 @@ func (x *ClientAcknowledgement) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ClientAcknowledgement.ProtoReflect.Descriptor instead.
-func (*ClientAcknowledgement) Descriptor() ([]byte, []int) {
+// Deprecated: Use Ack.ProtoReflect.Descriptor instead.
+func (*Ack) Descriptor() ([]byte, []int) {
 	return file_proto_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ClientAcknowledgement) GetBidOutcome() string {
+func (x *Ack) GetOutcome() string {
 	if x != nil {
-		return x.BidOutcome
+		return x.Outcome
 	}
 	return ""
 }
@@ -153,29 +154,34 @@ func (*Nothing) Descriptor() ([]byte, []int) {
 	return file_proto_proto_rawDescGZIP(), []int{2}
 }
 
-type Outcome struct {
+// The full auction state. Used both as the return of a Result request made by a client and as the replication message between nodes.
+// seq == 0 means that no bid has been placed yet.
+// over is only filled in for Result requests.
+type State struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	HighestBidId     string                 `protobuf:"bytes,1,opt,name=highestBidId,proto3" json:"highestBidId,omitempty"`
 	HighestBidAmount int32                  `protobuf:"varint,2,opt,name=highestBidAmount,proto3" json:"highestBidAmount,omitempty"`
 	EndTimestamp     int64                  `protobuf:"varint,3,opt,name=endTimestamp,proto3" json:"endTimestamp,omitempty"`
+	Seq              int64                  `protobuf:"varint,4,opt,name=seq,proto3" json:"seq,omitempty"`
+	Over             bool                   `protobuf:"varint,5,opt,name=over,proto3" json:"over,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
-func (x *Outcome) Reset() {
-	*x = Outcome{}
+func (x *State) Reset() {
+	*x = State{}
 	mi := &file_proto_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Outcome) String() string {
+func (x *State) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Outcome) ProtoMessage() {}
+func (*State) ProtoMessage() {}
 
-func (x *Outcome) ProtoReflect() protoreflect.Message {
+func (x *State) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -187,364 +193,42 @@ func (x *Outcome) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Outcome.ProtoReflect.Descriptor instead.
-func (*Outcome) Descriptor() ([]byte, []int) {
+// Deprecated: Use State.ProtoReflect.Descriptor instead.
+func (*State) Descriptor() ([]byte, []int) {
 	return file_proto_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *Outcome) GetHighestBidId() string {
+func (x *State) GetHighestBidId() string {
 	if x != nil {
 		return x.HighestBidId
 	}
 	return ""
 }
 
-func (x *Outcome) GetHighestBidAmount() int32 {
+func (x *State) GetHighestBidAmount() int32 {
 	if x != nil {
 		return x.HighestBidAmount
 	}
 	return 0
 }
 
-func (x *Outcome) GetEndTimestamp() int64 {
+func (x *State) GetEndTimestamp() int64 {
 	if x != nil {
 		return x.EndTimestamp
 	}
 	return 0
 }
 
-type AuctionInformation struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	HighestBidId     string                 `protobuf:"bytes,1,opt,name=highestBidId,proto3" json:"highestBidId,omitempty"`
-	HighestBidAmount int32                  `protobuf:"varint,2,opt,name=highestBidAmount,proto3" json:"highestBidAmount,omitempty"`
-	EndTimestamp     int64                  `protobuf:"varint,3,opt,name=endTimestamp,proto3" json:"endTimestamp,omitempty"`
-	SequenceNumber   int64                  `protobuf:"varint,4,opt,name=sequenceNumber,proto3" json:"sequenceNumber,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *AuctionInformation) Reset() {
-	*x = AuctionInformation{}
-	mi := &file_proto_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AuctionInformation) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AuctionInformation) ProtoMessage() {}
-
-func (x *AuctionInformation) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_proto_msgTypes[4]
+func (x *State) GetSeq() int64 {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AuctionInformation.ProtoReflect.Descriptor instead.
-func (*AuctionInformation) Descriptor() ([]byte, []int) {
-	return file_proto_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *AuctionInformation) GetHighestBidId() string {
-	if x != nil {
-		return x.HighestBidId
-	}
-	return ""
-}
-
-func (x *AuctionInformation) GetHighestBidAmount() int32 {
-	if x != nil {
-		return x.HighestBidAmount
+		return x.Seq
 	}
 	return 0
 }
 
-func (x *AuctionInformation) GetEndTimestamp() int64 {
+func (x *State) GetOver() bool {
 	if x != nil {
-		return x.EndTimestamp
-	}
-	return 0
-}
-
-func (x *AuctionInformation) GetSequenceNumber() int64 {
-	if x != nil {
-		return x.SequenceNumber
-	}
-	return 0
-}
-
-type NodeAcknowledgement struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	CopyOutcome   string                 `protobuf:"bytes,2,opt,name=copyOutcome,proto3" json:"copyOutcome,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NodeAcknowledgement) Reset() {
-	*x = NodeAcknowledgement{}
-	mi := &file_proto_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NodeAcknowledgement) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NodeAcknowledgement) ProtoMessage() {}
-
-func (x *NodeAcknowledgement) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NodeAcknowledgement.ProtoReflect.Descriptor instead.
-func (*NodeAcknowledgement) Descriptor() ([]byte, []int) {
-	return file_proto_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *NodeAcknowledgement) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-func (x *NodeAcknowledgement) GetCopyOutcome() string {
-	if x != nil {
-		return x.CopyOutcome
-	}
-	return ""
-}
-
-type CommitRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	SequenceNumber int64                  `protobuf:"varint,1,opt,name=sequenceNumber,proto3" json:"sequenceNumber,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *CommitRequest) Reset() {
-	*x = CommitRequest{}
-	mi := &file_proto_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CommitRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CommitRequest) ProtoMessage() {}
-
-func (x *CommitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CommitRequest.ProtoReflect.Descriptor instead.
-func (*CommitRequest) Descriptor() ([]byte, []int) {
-	return file_proto_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *CommitRequest) GetSequenceNumber() int64 {
-	if x != nil {
-		return x.SequenceNumber
-	}
-	return 0
-}
-
-type RecoveryInformation struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	CommittedAuction        *AuctionInformation    `protobuf:"bytes,1,opt,name=committedAuction,proto3" json:"committedAuction,omitempty"`
-	PendingAuction          *AuctionInformation    `protobuf:"bytes,2,opt,name=pendingAuction,proto3" json:"pendingAuction,omitempty"`
-	CommittedSequenceNumber int64                  `protobuf:"varint,3,opt,name=committedSequenceNumber,proto3" json:"committedSequenceNumber,omitempty"`
-	PrimaryId               string                 `protobuf:"bytes,4,opt,name=primaryId,proto3" json:"primaryId,omitempty"`
-	Term                    int64                  `protobuf:"varint,5,opt,name=term,proto3" json:"term,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
-}
-
-func (x *RecoveryInformation) Reset() {
-	*x = RecoveryInformation{}
-	mi := &file_proto_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RecoveryInformation) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RecoveryInformation) ProtoMessage() {}
-
-func (x *RecoveryInformation) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RecoveryInformation.ProtoReflect.Descriptor instead.
-func (*RecoveryInformation) Descriptor() ([]byte, []int) {
-	return file_proto_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *RecoveryInformation) GetCommittedAuction() *AuctionInformation {
-	if x != nil {
-		return x.CommittedAuction
-	}
-	return nil
-}
-
-func (x *RecoveryInformation) GetPendingAuction() *AuctionInformation {
-	if x != nil {
-		return x.PendingAuction
-	}
-	return nil
-}
-
-func (x *RecoveryInformation) GetCommittedSequenceNumber() int64 {
-	if x != nil {
-		return x.CommittedSequenceNumber
-	}
-	return 0
-}
-
-func (x *RecoveryInformation) GetPrimaryId() string {
-	if x != nil {
-		return x.PrimaryId
-	}
-	return ""
-}
-
-func (x *RecoveryInformation) GetTerm() int64 {
-	if x != nil {
-		return x.Term
-	}
-	return 0
-}
-
-type NewPrimary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PrimaryId     string                 `protobuf:"bytes,1,opt,name=primaryId,proto3" json:"primaryId,omitempty"`
-	Term          int64                  `protobuf:"varint,2,opt,name=term,proto3" json:"term,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NewPrimary) Reset() {
-	*x = NewPrimary{}
-	mi := &file_proto_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NewPrimary) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NewPrimary) ProtoMessage() {}
-
-func (x *NewPrimary) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NewPrimary.ProtoReflect.Descriptor instead.
-func (*NewPrimary) Descriptor() ([]byte, []int) {
-	return file_proto_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *NewPrimary) GetPrimaryId() string {
-	if x != nil {
-		return x.PrimaryId
-	}
-	return ""
-}
-
-func (x *NewPrimary) GetTerm() int64 {
-	if x != nil {
-		return x.Term
-	}
-	return 0
-}
-
-type PrimaryAcknowledgement struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Acknowledged  bool                   `protobuf:"varint,1,opt,name=acknowledged,proto3" json:"acknowledged,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PrimaryAcknowledgement) Reset() {
-	*x = PrimaryAcknowledgement{}
-	mi := &file_proto_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PrimaryAcknowledgement) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PrimaryAcknowledgement) ProtoMessage() {}
-
-func (x *PrimaryAcknowledgement) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PrimaryAcknowledgement.ProtoReflect.Descriptor instead.
-func (*PrimaryAcknowledgement) Descriptor() ([]byte, []int) {
-	return file_proto_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *PrimaryAcknowledgement) GetAcknowledged() bool {
-	if x != nil {
-		return x.Acknowledged
+		return x.Over
 	}
 	return false
 }
@@ -556,45 +240,20 @@ const file_proto_proto_rawDesc = "" +
 	"\vproto.proto\"6\n" +
 	"\x06Amount\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
-	"\tbidAmount\x18\x02 \x01(\x05R\tbidAmount\"7\n" +
-	"\x15ClientAcknowledgement\x12\x1e\n" +
-	"\n" +
-	"bidOutcome\x18\x01 \x01(\tR\n" +
-	"bidOutcome\"\t\n" +
-	"\aNothing\"}\n" +
-	"\aOutcome\x12\"\n" +
+	"\tbidAmount\x18\x02 \x01(\x05R\tbidAmount\"\x1f\n" +
+	"\x03Ack\x12\x18\n" +
+	"\aoutcome\x18\x01 \x01(\tR\aoutcome\"\t\n" +
+	"\aNothing\"\xa1\x01\n" +
+	"\x05State\x12\"\n" +
 	"\fhighestBidId\x18\x01 \x01(\tR\fhighestBidId\x12*\n" +
 	"\x10highestBidAmount\x18\x02 \x01(\x05R\x10highestBidAmount\x12\"\n" +
-	"\fendTimestamp\x18\x03 \x01(\x03R\fendTimestamp\"\xb0\x01\n" +
-	"\x12AuctionInformation\x12\"\n" +
-	"\fhighestBidId\x18\x01 \x01(\tR\fhighestBidId\x12*\n" +
-	"\x10highestBidAmount\x18\x02 \x01(\x05R\x10highestBidAmount\x12\"\n" +
-	"\fendTimestamp\x18\x03 \x01(\x03R\fendTimestamp\x12&\n" +
-	"\x0esequenceNumber\x18\x04 \x01(\x03R\x0esequenceNumber\"Q\n" +
-	"\x13NodeAcknowledgement\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12 \n" +
-	"\vcopyOutcome\x18\x02 \x01(\tR\vcopyOutcome\"7\n" +
-	"\rCommitRequest\x12&\n" +
-	"\x0esequenceNumber\x18\x01 \x01(\x03R\x0esequenceNumber\"\xff\x01\n" +
-	"\x13RecoveryInformation\x12?\n" +
-	"\x10committedAuction\x18\x01 \x01(\v2\x13.AuctionInformationR\x10committedAuction\x12;\n" +
-	"\x0ependingAuction\x18\x02 \x01(\v2\x13.AuctionInformationR\x0ependingAuction\x128\n" +
-	"\x17committedSequenceNumber\x18\x03 \x01(\x03R\x17committedSequenceNumber\x12\x1c\n" +
-	"\tprimaryId\x18\x04 \x01(\tR\tprimaryId\x12\x12\n" +
-	"\x04term\x18\x05 \x01(\x03R\x04term\">\n" +
-	"\n" +
-	"NewPrimary\x12\x1c\n" +
-	"\tprimaryId\x18\x01 \x01(\tR\tprimaryId\x12\x12\n" +
-	"\x04term\x18\x02 \x01(\x03R\x04term\"<\n" +
-	"\x16PrimaryAcknowledgement\x12\"\n" +
-	"\facknowledged\x18\x01 \x01(\bR\facknowledged2\xd8\x02\n" +
-	"\fAuctionHouse\x12&\n" +
-	"\x03Bid\x12\a.Amount\x1a\x16.ClientAcknowledgement\x12\x1c\n" +
-	"\x06Result\x12\b.Nothing\x1a\b.Outcome\x12C\n" +
-	"\x16CopyAuctionInformation\x12\x13.AuctionInformation\x1a\x14.NodeAcknowledgement\x12@\n" +
-	"\x18CommitAuctionInformation\x12\x0e.CommitRequest\x1a\x14.NodeAcknowledgement\x128\n" +
-	"\x16GetRecoveryInformation\x12\b.Nothing\x1a\x14.RecoveryInformation\x12A\n" +
-	"\x19GetPrimaryAcknowledgement\x12\v.NewPrimary\x1a\x17.PrimaryAcknowledgementB\"Z RTVMandatoryActivity5/gRPC/protob\x06proto3"
+	"\fendTimestamp\x18\x03 \x01(\x03R\fendTimestamp\x12\x10\n" +
+	"\x03seq\x18\x04 \x01(\x03R\x03seq\x12\x12\n" +
+	"\x04over\x18\x05 \x01(\bR\x04over2[\n" +
+	"\fAuctionHouse\x12\x14\n" +
+	"\x03Bid\x12\a.Amount\x1a\x04.Ack\x12\x1a\n" +
+	"\x06Result\x12\b.Nothing\x1a\x06.State\x12\x19\n" +
+	"\tReplicate\x12\x06.State\x1a\x04.AckB\"Z RTVMandatoryActivity5/gRPC/protob\x06proto3"
 
 var (
 	file_proto_proto_rawDescOnce sync.Once
@@ -608,39 +267,25 @@ func file_proto_proto_rawDescGZIP() []byte {
 	return file_proto_proto_rawDescData
 }
 
-var file_proto_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_proto_goTypes = []any{
-	(*Amount)(nil),                 // 0: Amount
-	(*ClientAcknowledgement)(nil),  // 1: ClientAcknowledgement
-	(*Nothing)(nil),                // 2: Nothing
-	(*Outcome)(nil),                // 3: Outcome
-	(*AuctionInformation)(nil),     // 4: AuctionInformation
-	(*NodeAcknowledgement)(nil),    // 5: NodeAcknowledgement
-	(*CommitRequest)(nil),          // 6: CommitRequest
-	(*RecoveryInformation)(nil),    // 7: RecoveryInformation
-	(*NewPrimary)(nil),             // 8: NewPrimary
-	(*PrimaryAcknowledgement)(nil), // 9: PrimaryAcknowledgement
+	(*Amount)(nil),  // 0: Amount
+	(*Ack)(nil),     // 1: Ack
+	(*Nothing)(nil), // 2: Nothing
+	(*State)(nil),   // 3: State
 }
 var file_proto_proto_depIdxs = []int32{
-	4, // 0: RecoveryInformation.committedAuction:type_name -> AuctionInformation
-	4, // 1: RecoveryInformation.pendingAuction:type_name -> AuctionInformation
-	0, // 2: AuctionHouse.Bid:input_type -> Amount
-	2, // 3: AuctionHouse.Result:input_type -> Nothing
-	4, // 4: AuctionHouse.CopyAuctionInformation:input_type -> AuctionInformation
-	6, // 5: AuctionHouse.CommitAuctionInformation:input_type -> CommitRequest
-	2, // 6: AuctionHouse.GetRecoveryInformation:input_type -> Nothing
-	8, // 7: AuctionHouse.GetPrimaryAcknowledgement:input_type -> NewPrimary
-	1, // 8: AuctionHouse.Bid:output_type -> ClientAcknowledgement
-	3, // 9: AuctionHouse.Result:output_type -> Outcome
-	5, // 10: AuctionHouse.CopyAuctionInformation:output_type -> NodeAcknowledgement
-	5, // 11: AuctionHouse.CommitAuctionInformation:output_type -> NodeAcknowledgement
-	7, // 12: AuctionHouse.GetRecoveryInformation:output_type -> RecoveryInformation
-	9, // 13: AuctionHouse.GetPrimaryAcknowledgement:output_type -> PrimaryAcknowledgement
-	8, // [8:14] is the sub-list for method output_type
-	2, // [2:8] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 0: AuctionHouse.Bid:input_type -> Amount
+	2, // 1: AuctionHouse.Result:input_type -> Nothing
+	3, // 2: AuctionHouse.Replicate:input_type -> State
+	1, // 3: AuctionHouse.Bid:output_type -> Ack
+	3, // 4: AuctionHouse.Result:output_type -> State
+	1, // 5: AuctionHouse.Replicate:output_type -> Ack
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_proto_proto_init() }
@@ -654,7 +299,7 @@ func file_proto_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_proto_rawDesc), len(file_proto_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

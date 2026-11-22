@@ -6,57 +6,26 @@ message Amount {
     int32 bidAmount = 2;
 }
 
-message ClientAcknowledgement {
-    string bidOutcome = 1;
+// Outcome either "success", "fail" or "exception"
+message Ack {
+    string outcome = 1;
 }
 
 message Nothing {}
 
-message Outcome {
+// The full auction state. Used both as the return of a Result request made by a client and as the replication message between nodes.
+// seq == 0 means that no bid has been placed yet. 
+// over is only filled in for Result requests.
+message State {
     string highestBidId = 1;
     int32 highestBidAmount = 2;
     int64 endTimestamp = 3;
+    int64 seq = 4;
+    bool over = 5;
 }
-
-message AuctionInformation {
-    string highestBidId = 1;
-    int32 highestBidAmount = 2;
-    int64 endTimestamp = 3;
-    int64 sequenceNumber = 4;
-}
-
-message NodeAcknowledgement {
-    bool success = 1;
-    string copyOutcome = 2;
-}
-
-message CommitRequest {
-    int64 sequenceNumber = 1;
-}
-
-message RecoveryInformation {
-    AuctionInformation committedAuction = 1;
-    AuctionInformation pendingAuction = 2;
-    int64 committedSequenceNumber = 3;
-    string primaryId = 4;
-    int64 term = 5;
-}
-
-message NewPrimary {
-    string primaryId = 1;
-    int64 term = 2;
-}
-
-message PrimaryAcknowledgement {
-    bool acknowledged = 1;
-}
-
 
 service AuctionHouse {
-    rpc Bid(Amount) returns (ClientAcknowledgement);
-    rpc Result(Nothing) returns (Outcome);
-    rpc CopyAuctionInformation(AuctionInformation) returns (NodeAcknowledgement);
-    rpc CommitAuctionInformation(CommitRequest) returns (NodeAcknowledgement);
-    rpc GetRecoveryInformation(Nothing) returns (RecoveryInformation);
-    rpc GetPrimaryAcknowledgement(NewPrimary) returns (PrimaryAcknowledgement);
+    rpc Bid(Amount) returns (Ack);
+    rpc Result(Nothing) returns (State);
+    rpc Replicate(State) returns (Ack); // Internal, only used between nodes for auction state replication
 }

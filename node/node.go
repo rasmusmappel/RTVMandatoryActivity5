@@ -4,12 +4,11 @@ import (
 	pb "RTVMandatoryActivity5/gRPC"
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,19 +17,39 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// Length of the auction in seconds. The clock starts when the first bid is accepted.
+const auctionDuration int64 = 200
+
+// The network is assumed to deliver messages to non-crashed nodes within a known time limit,
+// so if a call takes longer than these limits, the node that was called has crashed.
+// forwardTimeout must be longer than replicateTimeout, because the primary can spend
+// up to replicateTimeout on a crashed backup before it answers a forwarded request.
+const (
+	replicateTimeout = 2 * time.Second
+	forwardTimeout   = 5 * time.Second
+)
+
 type Server struct {
 	pb.UnimplementedAuctionHouseServer
-	id                      string
-	primaryId               string
-	term                    int64
-	currentAuctionTimestamp int64
-	currentHighestBid       int32
-	currentHighestBidder    string
-	committedSequenceNo     int64
-	pendingAuction          *pb.AuctionInformation
-	knownNodesMap           map[string]string
-	otherNodeClients        map[string]pb.AuctionHouseClient
-	mu                      sync.Mutex
+	id string
+
+	// The auction state that this node contains. seq == 0 means that no bid has been placed yet.
+	// Protected by mu, which is also the serialization point of the whole system when this node is the primary.
+	highestBidId     string
+	highestBidAmount int32
+	endTimestamp     int64
+	seq              int64
+	mu               sync.Mutex
+
+	// The failure detector state. nodeIds contains all nodes (including this one) in ascending order.
+	// The primary is always the lexicographically lowest ID in nodeIds that isn't in the dead map.
+	// Protected by deadMu, which is a separate mutex from mu, so the primary can mark nodes as dead while it holds the primary mutex mu.
+	nodeIds []string        // Slice of the known node IDs
+	dead    map[string]bool // Map of node IDs to booleans. If not in the map, a node at a specific ID is assumed alive.
+	deadMu  sync.Mutex
+
+	// Only written at startup, so it can be read without a lock afterwards.
+	otherNodeClients map[string]pb.AuctionHouseClient
 }
 
 func main() {
@@ -53,13 +72,10 @@ func main() {
 	defer logFile.Close()
 
 	server := Server{
-		id:                      myID,
-		primaryId:               "a",
-		knownNodesMap:           make(map[string]string),
-		otherNodeClients:        make(map[string]pb.AuctionHouseClient),
-		currentAuctionTimestamp: 0,
-		currentHighestBid:       0,
-		currentHighestBidder:    "none",
+		id:               myID,
+		nodeIds:          []string{myID},
+		dead:             make(map[string]bool),
+		otherNodeClients: make(map[string]pb.AuctionHouseClient),
 	}
 
 	// READING FROM ID MAP FILE
@@ -70,16 +86,30 @@ func main() {
 
 	defer idFile.Close()
 
-	// Set own ID and fill address map
+	// Set own port, remember the address of every other node and fill the list of all node IDs
+	otherAddresses := make(map[string]string)
+
 	reader := bufio.NewScanner(idFile)
 	for reader.Scan() {
 		parts := strings.Fields(reader.Text())
+		if len(parts) < 2 {
+			continue
+		}
 		if parts[0] == myID {
 			myPort = parts[1]
 		} else {
-			server.knownNodesMap[parts[0]] = "localhost:" + parts[1]
+			otherAddresses[parts[0]] = "localhost:" + parts[1]
+			server.nodeIds = append(server.nodeIds, parts[0])
 		}
 	}
+
+	if myPort == "" {
+		log.Fatalf("ID %s was not found in idMap.txt", myID) // If the user accidentally types a node ID that doesn't exist in idMap.txt, the program crashes
+	}
+
+	// Sort the IDs in the nodeId slice, so the lowest-ID live node can be found as the primary,
+	// and so replication always happens in ascending ID order
+	sort.Strings(server.nodeIds)
 
 	// Listen and serve own server
 	listener, _ := net.Listen("tcp", "localhost:"+myPort)
@@ -88,21 +118,21 @@ func main() {
 
 	pb.RegisterAuctionHouseServer(grpcServer, &server)
 
-	log.Println("[STARTUP] Server has started")
-
-	//Fill nodes map with new AuctionHouseClients based on the knownNodesMap
-	for k, v := range server.knownNodesMap {
-		conn, err := grpc.NewClient(v, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	//Fill clients map with new AuctionHouseClients based on the other addresses in the
+	for id, port := range otherAddresses {
+		conn, err := grpc.NewClient(port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if (err) != nil {
 			log.Fatal(err)
 		}
 		defer conn.Close()
-		server.otherNodeClients[k] = pb.NewAuctionHouseClient(conn)
+		server.otherNodeClients[id] = pb.NewAuctionHouseClient(conn)
 	}
 
 	// Start server after knowing who the other nodes are,
 	// so clients can't bid while there's only one known node
 	go grpcServer.Serve(listener)
+
+	log.Println("[STARTUP] Server has started")
 
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -118,446 +148,242 @@ func main() {
 }
 
 // Method for handling client bid requests
-func (s *Server) Bid(ctx context.Context, bidMessage *pb.Amount) (*pb.ClientAcknowledgement, error) {
+func (s *Server) Bid(ctx context.Context, bidMessage *pb.Amount) (*pb.Ack, error) {
 
-	// Check if I'm the primary node, if not, forward the message to the primary node,
-	// so it can handle auction information replication in a proper order.
-	if s.id != s.primaryId {
-		primaryNodeClient := s.otherNodeClients[s.primaryId]
+	for {
+		primaryId := s.currentPrimary()
 
-		response, err := primaryNodeClient.Bid(ctx, bidMessage)
-
-		if err != nil {
-
-			// Try to recover auction information
-			// Elect a new leader and make sure the information is copied and committed
-			// Retry bidding if the recovery succeeded
+		// If I'm the primary node, handle the bid myself.
+		if primaryId == s.id {
+			return s.handleBidAsPrimary(bidMessage), nil
 		}
 
-		return response, err
+		// If not, forward the message to the primary node, so it can handle the bid and
+		// the replication in a proper order. No lock is held here, so the primary can replicate to me meanwhile.
+		forwardContext, cancel := context.WithTimeout(ctx, forwardTimeout)
+		response, err := s.otherNodeClients[primaryId].Bid(forwardContext, bidMessage)
+		cancel()
+
+		if err == nil {
+			return response, nil
+		}
+
+		// If the client itself has given up, the error says nothing about the primary.
+		if ctx.Err() != nil {
+			return &pb.Ack{Outcome: "exception"}, nil
+		}
+
+		// The network is reliable, so a failed or timed out call means the primary has crashed.
+		// Mark it as dead and go around the loop, which gives the next lowest ID as the new primary (maybe me).
+		s.markDead(primaryId)
 	}
+}
+
+// Method for handling a bid on the primary node.
+// The lock is held during the whole method, including replication, so all operations on the primary are serialized.
+func (s *Server) handleBidAsPrimary(bidMessage *pb.Amount) *pb.Ack {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// The if-statement below handles creation of the first auction.
-	if s.currentHighestBidder == "none" {
+	now := time.Now().Unix()
 
-		localCurrentAuctionTimestamp := time.Now().Unix() + 100
-		localCurrentHighestBid := bidMessage.BidAmount
-		localCurrentHighestBidder := bidMessage.Id
+	// A client retries its bid if it never got an answer, for example because the old primary crashed after applying it.
+	// If the bid is already the highest bid, treat the retry as a success instead of failing it for not being higher.
+	// The state is replicated again first, because the old primary may have crashed before reaching every backup.
+	if s.seq > 0 && s.highestBidId == bidMessage.Id && s.highestBidAmount == bidMessage.BidAmount {
+		s.replicate(s.snapshot()) // Send state to other nodes
 
-		copyMessage := &pb.AuctionInformation{EndTimestamp: localCurrentAuctionTimestamp,
-			HighestBidAmount: localCurrentHighestBid,
-			HighestBidId:     localCurrentHighestBidder,
-			SequenceNumber:   s.committedSequenceNo + 1,
-		}
+		log.Printf("Bid of %d from %s was already registered, treating it as a retry", bidMessage.BidAmount, bidMessage.Id)
 
-		if !s.replicateAuctionInformation(ctx, copyMessage) {
-			return &pb.ClientAcknowledgement{
-				BidOutcome: "Exception: Not enough nodes acknowledged the bid",
-			}, nil
-		}
-
-		s.currentAuctionTimestamp = copyMessage.EndTimestamp
-		s.currentHighestBid = copyMessage.HighestBidAmount
-		s.currentHighestBidder = copyMessage.HighestBidId
-		s.committedSequenceNo = copyMessage.SequenceNumber
-
-		commitRequest := &pb.CommitRequest{
-			SequenceNumber: copyMessage.SequenceNumber,
-		}
-
-		successfulCommits := s.commitLoopMethod(ctx, commitRequest)
-
-		log.Printf(
-			"Commit completed on %d backup nodes",
-			successfulCommits,
-		)
-
-		return &pb.ClientAcknowledgement{BidOutcome: "This was the first auction, created a new auction with your bid"}, nil
-
+		return &pb.Ack{Outcome: "success"}
 	}
 
-	// Checks if the current auction is still ongoing.
-	// If yes, then checks if the incoming bid is higher than the current highest bid
-	// If no, creates a new auction with the bid.
-	if s.currentAuctionTimestamp > time.Now().Unix() {
+	// The first bid made by a client starts the auction. Later bids are only accepted before the auction has ended.
+	newEndTimestamp := s.endTimestamp
 
-		log.Println("Internal highest bid " + strconv.Itoa(int(s.currentHighestBid)))
-		log.Println("Incoming bid " + strconv.Itoa(int(bidMessage.BidAmount)))
-		if s.currentHighestBid < bidMessage.BidAmount {
+	if s.seq == 0 {
+		newEndTimestamp = now + auctionDuration // Set the timestamp of the auction
+	} else if now >= s.endTimestamp {
+		log.Printf("Bid of %d from %s rejected, the auction is over", bidMessage.BidAmount, bidMessage.Id)
 
-			localCurrentHighestBid := bidMessage.BidAmount
-			localCurrentHighestBidder := bidMessage.Id
-
-			copyMessage := &pb.AuctionInformation{EndTimestamp: s.currentAuctionTimestamp,
-				HighestBidAmount: localCurrentHighestBid,
-				HighestBidId:     localCurrentHighestBidder,
-				SequenceNumber:   s.committedSequenceNo + 1,
-			}
-
-			if !s.replicateAuctionInformation(ctx, copyMessage) {
-				return &pb.ClientAcknowledgement{
-					BidOutcome: "Exception: Not enough nodes acknowledged the bid",
-				}, nil
-			}
-
-			s.currentHighestBid = copyMessage.HighestBidAmount
-			s.currentHighestBidder = copyMessage.HighestBidId
-			s.committedSequenceNo = copyMessage.SequenceNumber
-
-			commitRequest := &pb.CommitRequest{
-				SequenceNumber: copyMessage.SequenceNumber,
-			}
-
-			successfulCommits := s.commitLoopMethod(ctx, commitRequest)
-
-			log.Printf(
-				"Commit completed on %d backup nodes",
-				successfulCommits,
-			)
-
-			return &pb.ClientAcknowledgement{BidOutcome: "Your bid was higher than the previously highest bid, and was accepted"}, nil
-
-		} else {
-
-			return &pb.ClientAcknowledgement{BidOutcome: "Your bid was lower than the highest bid, and was rejected"}, nil
-
-		}
-	} else {
-
-		localCurrentAuctionTimestamp := time.Now().Unix() + 100
-		localCurrentHighestBid := bidMessage.BidAmount
-		localCurrentHighestBidder := bidMessage.Id
-
-		copyMessage := &pb.AuctionInformation{EndTimestamp: localCurrentAuctionTimestamp,
-			HighestBidAmount: localCurrentHighestBid,
-			HighestBidId:     localCurrentHighestBidder,
-			SequenceNumber:   s.committedSequenceNo + 1,
-		}
-
-		if !s.replicateAuctionInformation(ctx, copyMessage) {
-			return &pb.ClientAcknowledgement{
-				BidOutcome: "Exception: Not enough nodes acknowledged the bid",
-			}, nil
-		}
-
-		s.currentAuctionTimestamp = copyMessage.EndTimestamp
-		s.currentHighestBid = copyMessage.HighestBidAmount
-		s.currentHighestBidder = copyMessage.HighestBidId
-		s.committedSequenceNo = copyMessage.SequenceNumber
-
-		commitRequest := &pb.CommitRequest{
-			SequenceNumber: copyMessage.SequenceNumber,
-		}
-
-		successfulCommits := s.commitLoopMethod(ctx, commitRequest)
-
-		log.Printf(
-			"Commit completed on %d backup nodes",
-			successfulCommits,
-		)
-
-		return &pb.ClientAcknowledgement{BidOutcome: "Old auction has ended, created a new auction with your bid"}, nil
+		return &pb.Ack{Outcome: "fail"}
 	}
 
+	// A bid has to be higher than the highest bid so far.
+	// That also makes it higher than all earlier bids from the same bidder.
+	// Before the first bid, the highest bid is 0, so the first bid has to be positive.
+	if bidMessage.BidAmount <= s.highestBidAmount {
+		log.Printf("Bid of %d from %s rejected, highest bid is %d", bidMessage.BidAmount, bidMessage.Id, s.highestBidAmount)
+
+		return &pb.Ack{Outcome: "fail"}
+	}
+
+	newState := &pb.State{
+		HighestBidId:     bidMessage.Id,
+		HighestBidAmount: bidMessage.BidAmount,
+		EndTimestamp:     newEndTimestamp,
+		Seq:              s.seq + 1,
+	}
+
+	// Send the new state to the backups before answering the client,
+	// so an acknowledged bid is never lost when the primary crashes.
+	s.replicate(newState)
+	s.apply(newState)
+
+	log.Printf("Bid of %d from %s accepted", bidMessage.BidAmount, bidMessage.Id)
+
+	return &pb.Ack{Outcome: "success"}
 }
 
 // Method for handling client result requests
-func (s *Server) Result(ctx context.Context, emptyMessage *pb.Nothing) (*pb.Outcome, error) {
-	s.mu.Lock()
-	outcomeMessage := &pb.Outcome{HighestBidId: s.currentHighestBidder, HighestBidAmount: s.currentHighestBid, EndTimestamp: s.currentAuctionTimestamp}
-	s.mu.Unlock()
+func (s *Server) Result(ctx context.Context, emptyMessage *pb.Nothing) (*pb.State, error) {
 
-	return outcomeMessage, nil
+	for {
+		primaryId := s.currentPrimary()
 
+		// Results are also answered by the primary, never from the local state of a backup,
+		// so a client can't read a state that is older than a bid that already got acknowledged.
+		if primaryId == s.id {
+			return s.handleResultAsPrimary(), nil
+		}
+
+		forwardContext, cancel := context.WithTimeout(ctx, forwardTimeout)
+		response, err := s.otherNodeClients[primaryId].Result(forwardContext, emptyMessage)
+		cancel()
+
+		if err == nil {
+			return response, nil
+		}
+
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		s.markDead(primaryId)
+	}
 }
 
-// Method for copying auction information from another node
-func (s *Server) CopyAuctionInformation(ctx context.Context, information *pb.AuctionInformation) (*pb.NodeAcknowledgement, error) {
+// Method for answering a result request on the primary node.
+// Takes the same lock as bids, so it waits for any bid that's currently being replicated.
+func (s *Server) handleResultAsPrimary() *pb.State {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Check if the sequence number of the incoming information is one higher as expected.
-	// If not, return an acknowledgement that indicates that copying failed
-	if information.SequenceNumber != s.committedSequenceNo+1 {
-		return &pb.NodeAcknowledgement{Success: false, CopyOutcome: "Didn't receive the expected sequence number"}, nil
-	}
+	state := s.snapshot()
 
-	s.pendingAuction = information
+	// The auction is over when a bid has started it, and the end timestamp has passed.
+	state.Over = s.seq > 0 && time.Now().Unix() >= s.endTimestamp
 
-	return &pb.NodeAcknowledgement{Success: true, CopyOutcome: "Successfully copied the sent information"}, nil
+	return state
 }
 
-// Method for handling the replication loop, to avoid redundancy
-// Also checks if there's a majority of nodes that have successfully copied the new information
-func (s *Server) replicateAuctionInformation(
-	ctx context.Context,
-	information *pb.AuctionInformation,
-) bool {
-
-	// Count itself as one successful replication
-	successfulCopies := 1
-
-	// Calculate the majority required to
-	totalNodes := len(s.knownNodesMap) + 1
-	majority := totalNodes/2 + 1
-
-	for nodeId, nodeClient := range s.otherNodeClients {
-
-		timeOutContext, cancel := context.WithTimeout(ctx, 2*time.Second)
-
-		acknowledgement, err := nodeClient.CopyAuctionInformation(
-			timeOutContext, information,
-		)
-
-		cancel()
-
-		if err != nil {
-			log.Printf(
-				"Node %s failed when copying auction information: %v",
-				nodeId, err,
-			)
-			continue
-		}
-
-		if acknowledgement.Success {
-			successfulCopies++
-		}
-		log.Println(acknowledgement.CopyOutcome)
-	}
-
-	return successfulCopies >= majority
-}
-
-// Method for committing the previously copied information,
-// so the auction information that's returned to the client is only committed information.
-func (s *Server) CommitAuctionInformation(ctx context.Context, request *pb.CommitRequest) (*pb.NodeAcknowledgement, error) {
+// Method for receiving the full auction state from the primary.
+func (s *Server) Replicate(ctx context.Context, state *pb.State) (*pb.Ack, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.pendingAuction == nil || s.pendingAuction.SequenceNumber != request.SequenceNumber {
-		return &pb.NodeAcknowledgement{Success: false, CopyOutcome: "The request doesn't match the pending update!"}, nil
+	// Only move forward. The state contains everything, so a node that missed an earlier update is brought
+	// up to date by this one, and an old or repeated update can't overwrite a newer state.
+	if state.Seq > s.seq {
+		s.apply(state)
+		log.Printf("Replicated state with sequence number %d", state.Seq)
 	}
 
-	s.currentAuctionTimestamp = s.pendingAuction.EndTimestamp
-	s.currentHighestBid = s.pendingAuction.HighestBidAmount
-	s.currentHighestBidder = s.pendingAuction.HighestBidId
-
-	s.committedSequenceNo = request.SequenceNumber
-
-	s.pendingAuction = nil
-
-	return &pb.NodeAcknowledgement{Success: true, CopyOutcome: "Successfully committed the pending auction."}, nil
+	return &pb.Ack{Outcome: "success"}, nil
 }
 
-// Sends the commit request to all backup nodes.
-// Returns the number of backups that successfully committed the update.
-func (s *Server) commitLoopMethod(
-	ctx context.Context,
-	request *pb.CommitRequest,
-) int {
+// Method for sending a state to all backups, in ascending ID order.
+// The order matters: if the primary crashes halfway, the backup that becomes the new primary
+// (the lowest ID) is the first one that got the state, so it's at least as new as all other backups.
+// Must be called while holding mu.
+func (s *Server) replicate(state *pb.State) {
 
-	successfulCommits := 0
+	for _, nodeId := range s.nodeIds {
 
-	for nodeId, nodeClient := range s.otherNodeClients {
+		if nodeId == s.id || s.isDead(nodeId) {
+			continue
+		}
 
-		timeOutContext, cancel := context.WithTimeout(
-			ctx,
-			2*time.Second,
-		)
+		// A fresh context is used instead of the request's context. If the request was cancelled,
+		// it would make a perfectly healthy backup look like it had crashed.
+		timeOutContext, cancel := context.WithTimeout(context.Background(), replicateTimeout)
 
-		acknowledgement, err := nodeClient.CommitAuctionInformation(
-			timeOutContext,
-			request,
-		)
+		acknowledgement, err := s.otherNodeClients[nodeId].Replicate(timeOutContext, state)
 
 		cancel()
 
+		// No majority is needed. The failure detector is perfect in this "network", so a node that doesn't answer is simply
+		// crashed, and it's dropped from the set of nodes that the primary replicates to.
 		if err != nil {
-			log.Printf(
-				"Node %s failed when committing auction information: %v",
-				nodeId, err,
-			)
+			log.Printf("Node %s failed when replicating, marking it as crashed: %v", nodeId, err)
+			s.markDead(nodeId)
 			continue
 		}
 
-		if !acknowledgement.Success {
-			log.Printf(
-				"Node %s rejected the commit: %s",
-				nodeId,
-				acknowledgement.CopyOutcome,
-			)
-			continue
-		}
+		// Log the acknowledgement, to show successful replications in the logs.
+		log.Printf("Node %s replied to sequence number %d with: %s", nodeId, state.Seq, acknowledgement.Outcome)
 
-		successfulCommits++
-		log.Printf(
-			"Node %s successfully committed auction information",
-			nodeId,
-		)
+		log.Printf("Node %s successfully replicated sequence number %d", nodeId, state.Seq)
 	}
-
-	return successfulCommits
 }
 
-// Method for returning the latest information for recovery when the primary has crashed.
-func (s *Server) GetRecoveryInformation(
-	ctx context.Context,
-	request *pb.Nothing,
-) (*pb.RecoveryInformation, error) {
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	committedAuction := &pb.AuctionInformation{
-		HighestBidId:     s.currentHighestBidder,
-		HighestBidAmount: s.currentHighestBid,
-		EndTimestamp:     s.currentAuctionTimestamp,
-		SequenceNumber:   s.committedSequenceNo,
-	}
-
-	return &pb.RecoveryInformation{
-		CommittedAuction:        committedAuction,
-		PendingAuction:          s.pendingAuction,
-		CommittedSequenceNumber: s.committedSequenceNo,
-		PrimaryId:               s.primaryId,
-		Term:                    s.term,
-	}, nil
+// Method for overwriting the local auction state with the given state.
+// Must be called while holding mu.
+func (s *Server) apply(state *pb.State) {
+	s.highestBidId = state.HighestBidId
+	s.highestBidAmount = state.HighestBidAmount
+	s.endTimestamp = state.EndTimestamp
+	s.seq = state.Seq
 }
 
-// Method for actually electing a new leader when the primary has crashed.
-func (s *Server) recoverPrimary(ctx context.Context) error {
-
-	recoveryInfo := make(map[string]*pb.RecoveryInformation) // Make a map of the recovery information so it can be checked later
-
-	localInfo, err := s.GetRecoveryInformation(ctx, &pb.Nothing{}) // Get local information
-	if err != nil {
-		return err
+// Method for copying the local auction state into a message.
+// Must be called while holding mu.
+func (s *Server) snapshot() *pb.State {
+	return &pb.State{
+		HighestBidId:     s.highestBidId,
+		HighestBidAmount: s.highestBidAmount,
+		EndTimestamp:     s.endTimestamp,
+		Seq:              s.seq,
 	}
-
-	recoveryInfo[s.id] = localInfo // Save local information so it's included in the map
-
-	successes := 1        // Like in the copy and commit methods, count self as success.
-	acknowledgements := 1 // Count later acknowledgements
-
-	totalNodes := len(s.knownNodesMap) + 1
-	majority := totalNodes/2 + 1
-
-	for nodeId, nodeClient := range s.otherNodeClients {
-
-		timeoutContext, cancel := context.WithTimeout(ctx, 2*time.Second)
-		response, err := nodeClient.GetRecoveryInformation(timeoutContext, &pb.Nothing{})
-
-		cancel()
-
-		if err != nil {
-			log.Printf(
-				"Node %s could not be contacted for recovery information: %v",
-				nodeId,
-				err,
-			)
-			continue
-		}
-
-		successes++
-
-		recoveryInfo[nodeId] = response
-	}
-
-	if successes < majority { // Check if a majority responded
-		return fmt.Errorf(
-			"Recovery failed: only %d of %d nodes responded",
-			successes,
-			totalNodes,
-		)
-	}
-
-	// Find the lowest-ID available node as the primary candidate.
-	newPrimaryId := ""
-
-	for nodeId := range recoveryInfo {
-		if newPrimaryId == "" || nodeId < newPrimaryId {
-			newPrimaryId = nodeId
-		}
-	}
-
-	log.Printf("Selected node %s as primary candidate", newPrimaryId) // Locally log the selected new primary
-
-	newTerm := int64(0)
-
-	for _, info := range recoveryInfo { // Select the newest highest term from the recovered information, and increment by 1
-		if info.Term >= newTerm {
-			newTerm = info.Term + 1
-		}
-	}
-
-	for nodeId, nodeClient := range s.otherNodeClients {
-
-		timeoutContext, cancel := context.WithTimeout(ctx, 2*time.Second)
-		response, err := nodeClient.GetPrimaryAcknowledgement(timeoutContext, &pb.NewPrimary{PrimaryId: newPrimaryId, Term: newTerm})
-
-		cancel()
-
-		if err != nil {
-			log.Printf(
-				"Node %s could not be contacted for primary acknowledgement: %v",
-				nodeId,
-				err,
-			)
-			continue
-		}
-
-		if response.Acknowledged {
-			acknowledgements++
-		}
-
-	}
-
-	if acknowledgements < majority {
-		return fmt.Errorf(
-			"Election failed: only %d of %d nodes acknowledged",
-			acknowledgements,
-			totalNodes,
-		)
-	}
-
-	s.mu.Lock()
-	s.primaryId = newPrimaryId
-	s.term = newTerm
-	s.mu.Unlock()
-
-	return nil
 }
 
-// Method for confirming that this node has the same new primary and term no as the requester.
-func (s *Server) GetPrimaryAcknowledgement(ctx context.Context, request *pb.NewPrimary) (*pb.PrimaryAcknowledgement, error) {
+// Method for finding the primary, which is the lowest ID that hasn't been marked as dead.
+// This node is never marked as dead, so there's always a primary, and every node reaches the same
+// answer without any election messages once they agree on which nodes have crashed.
+func (s *Server) currentPrimary() string {
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.deadMu.Lock()
+	defer s.deadMu.Unlock()
 
-	// Reject elections from older terms.
-	if request.Term < s.term {
-		return &pb.PrimaryAcknowledgement{
-			Acknowledged: false,
-		}, nil
+	for _, nodeId := range s.nodeIds {
+		if !s.dead[nodeId] {
+			return nodeId
+		}
 	}
 
-	// Don't accept two different primaries in the same term.
-	if request.Term == s.term && request.PrimaryId != s.primaryId {
-		return &pb.PrimaryAcknowledgement{
-			Acknowledged: false,
-		}, nil
+	return s.id
+}
+
+// Method for checking if a node has been marked as crashed.
+func (s *Server) isDead(nodeId string) bool {
+
+	s.deadMu.Lock()
+	defer s.deadMu.Unlock()
+
+	return s.dead[nodeId]
+}
+
+// Method for marking a node as crashed. A crashed node never comes back, since failures are full crashes.
+func (s *Server) markDead(nodeId string) {
+
+	s.deadMu.Lock()
+	defer s.deadMu.Unlock()
+
+	if !s.dead[nodeId] {
+		s.dead[nodeId] = true
+		log.Printf("Node %s has crashed, new primary is now chosen without it", nodeId)
 	}
-
-	// Accept the proposed primary and term.
-	s.term = request.Term
-	s.primaryId = request.PrimaryId
-
-	return &pb.PrimaryAcknowledgement{
-		Acknowledged: true,
-	}, nil
 }
