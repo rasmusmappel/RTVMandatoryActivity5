@@ -28,7 +28,7 @@ type Client struct {
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage syntax: go run client.go <client id> <port> [<port> ...]") // Guide for the user trying to run the client
+		fmt.Println("Usage syntax: go run client.go <client id> <port> [<any number of additional ports]") // Guide for the user trying to run the client
 		os.Exit(1)
 	}
 
@@ -113,7 +113,7 @@ func (c *Client) makeBid(amount int) {
 
 	for attempt := 0; attempt < len(c.nodes); attempt++ { // Iterate over the nodes that this client knows
 
-		index := (c.current + attempt) % len(c.nodes) // Remember the index of the current port this client is trying
+		index := (c.current + attempt) % len(c.nodes) // Remember the index of the current port this client is trying if this node is successful, this node's index is saved
 
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		acknowledgement, err := c.nodes[index].Bid(ctx, bidMessage)
