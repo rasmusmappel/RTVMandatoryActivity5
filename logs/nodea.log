@@ -1,0 +1,9 @@
+[SERVER a] 2026/11/22 11:17:50 [STARTUP] Server has started
+[SERVER a] 2026/11/22 11:19:00 Node b replied to sequence number 1 with: success
+[SERVER a] 2026/11/22 11:19:00 Node b successfully replicated sequence number 1
+[SERVER a] 2026/11/22 11:19:00 Node c replied to sequence number 1 with: success
+[SERVER a] 2026/11/22 11:19:00 Node c successfully replicated sequence number 1
+[SERVER a] 2026/11/22 11:19:00 Node d replied to sequence number 1 with: success
+[SERVER a] 2026/11/22 11:19:00 Node d successfully replicated sequence number 1
+[SERVER a] 2026/11/22 11:19:00 Bid of 100 from Rasmus accepted
+[SERVER a] 2026/11/22 11:19:22 [SHUTDOWN] Server has shutdown.

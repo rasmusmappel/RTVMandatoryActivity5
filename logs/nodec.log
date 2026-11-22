@@ -1,0 +1,23 @@
+[SERVER c] 2026/11/22 11:18:10 [STARTUP] Server has started
+[SERVER c] 2026/11/22 11:19:00 Replicated state with sequence number 1
+[SERVER c] 2026/11/22 11:19:28 Replicated state with sequence number 2
+[SERVER c] 2026/11/22 11:19:51 Node a has crashed, new primary is now chosen without it
+[SERVER c] 2026/11/22 11:19:51 Node b has crashed, new primary is now chosen without it
+[SERVER c] 2026/11/22 11:19:51 Node d replied to sequence number 3 with: success
+[SERVER c] 2026/11/22 11:19:51 Node d successfully replicated sequence number 3
+[SERVER c] 2026/11/22 11:19:51 Bid of 300 from Rasmus accepted
+[SERVER c] 2026/11/22 11:20:44 Bid of 200 from Thor rejected, highest bid is 300
+[SERVER c] 2026/11/22 11:20:55 Node d replied to sequence number 4 with: success
+[SERVER c] 2026/11/22 11:20:55 Node d successfully replicated sequence number 4
+[SERVER c] 2026/11/22 11:20:55 Bid of 400 from Thor accepted
+[SERVER c] 2026/11/22 11:21:16 Node d replied to sequence number 5 with: success
+[SERVER c] 2026/11/22 11:21:16 Node d successfully replicated sequence number 5
+[SERVER c] 2026/11/22 11:21:16 Bid of 500 from Rasmus accepted
+[SERVER c] 2026/11/22 11:21:25 Bid of 500 from Thor rejected, highest bid is 500
+[SERVER c] 2026/11/22 11:21:34 Node d replied to sequence number 5 with: success
+[SERVER c] 2026/11/22 11:21:34 Node d successfully replicated sequence number 5
+[SERVER c] 2026/11/22 11:21:34 Bid of 500 from Rasmus was already registered, treating it as a retry
+[SERVER c] 2026/11/22 11:21:51 Node d replied to sequence number 6 with: success
+[SERVER c] 2026/11/22 11:21:51 Node d successfully replicated sequence number 6
+[SERVER c] 2026/11/22 11:21:51 Bid of 600 from Rasmus accepted
+[SERVER c] 2026/11/22 11:23:00 [SHUTDOWN] Server has shutdown.

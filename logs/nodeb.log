@@ -1,0 +1,9 @@
+[SERVER b] 2026/11/22 11:18:03 [STARTUP] Server has started
+[SERVER b] 2026/11/22 11:19:00 Replicated state with sequence number 1
+[SERVER b] 2026/11/22 11:19:28 Node a has crashed, new primary is now chosen without it
+[SERVER b] 2026/11/22 11:19:28 Node c replied to sequence number 2 with: success
+[SERVER b] 2026/11/22 11:19:28 Node c successfully replicated sequence number 2
+[SERVER b] 2026/11/22 11:19:28 Node d replied to sequence number 2 with: success
+[SERVER b] 2026/11/22 11:19:28 Node d successfully replicated sequence number 2
+[SERVER b] 2026/11/22 11:19:28 Bid of 200 from Rasmus accepted
+[SERVER b] 2026/11/22 11:19:47 [SHUTDOWN] Server has shutdown.
